@@ -1,8 +1,9 @@
+import { ELEPHANTSQL_URL } from "../.env";
 const express = require("express");
 const cors = require("cors");
-const mysql = require("mysql2");
 const http = require("http");
 const socketIO = require("socket.io");
+const { Pool } = require("pg");
 require("dotenv").config();
 
 const app = express();
@@ -14,31 +15,32 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "Mysql4571@",
-  database: "todo_app",
-});
+// Parse the ElephantSQL connection URL
+const connectionString = ELEPHANTSQL_URL;
 
-db.connect((err) => {
+const pool = new Pool({ connectionString });
+
+pool.connect((err) => {
   if (err) {
     console.error("Error connecting to the database:", err);
   } else {
-    console.log("Connected to MySQL database");
+    console.log("Connected to PostgreSQL database");
   }
 });
 
 // Get all tasks from the database
 app.get("/tasks", (req, res) => {
-  db.query("SELECT * FROM todos", (err, results) => {
+  pool.query("SELECT * FROM todos", (err, results) => {
     if (err) {
       console.error("Error fetching tasks from the database:", err);
       res
         .status(500)
         .json({ success: false, message: "Internal Server Error" });
     } else {
-      const tasks = results.map((row) => ({ id: row.id, task: row.task }));
+      const tasks = results.rows.map((row) => ({
+        id: row.id,
+        task: row.task,
+      }));
       res.json({ tasks });
     }
   });
@@ -49,18 +51,22 @@ app.post("/tasks", (req, res) => {
   const { task } = req.body;
 
   if (task.trim() !== "") {
-    db.query("INSERT INTO todos (task) VALUES (?)", [task], (err, result) => {
-      if (err) {
-        console.error("Error adding task to the database:", err);
-        res
-          .status(500)
-          .json({ success: false, message: "Internal Server Error" });
-      } else {
-        const newTaskId = result.insertId;
-        io.emit("newTask", { id: newTaskId, task }); // Notify clients about the new task
-        res.json({ success: true, message: "Task added successfully" });
+    pool.query(
+      "INSERT INTO todos (task) VALUES ($1) RETURNING id",
+      [task],
+      (err, result) => {
+        if (err) {
+          console.error("Error adding task to the database:", err);
+          res
+            .status(500)
+            .json({ success: false, message: "Internal Server Error" });
+        } else {
+          const newTaskId = result.rows[0].id;
+          io.emit("newTask", { id: newTaskId, task }); // Notify clients about the new task
+          res.json({ success: true, message: "Task added successfully" });
+        }
       }
-    });
+    );
   } else {
     res.status(400).json({ success: false, message: "Task cannot be empty." });
   }
@@ -70,7 +76,7 @@ app.post("/tasks", (req, res) => {
 app.delete("/tasks/:id", (req, res) => {
   const { id } = req.params;
 
-  db.query("DELETE FROM todos WHERE id = ?", [id], (err) => {
+  pool.query("DELETE FROM todos WHERE id = $1", [id], (err) => {
     if (err) {
       console.error("Error removing task from the database:", err);
       res
