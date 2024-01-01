@@ -1,31 +1,53 @@
-import { ELEPHANTSQL_URL } from "../.env";
-const express = require("express");
-const cors = require("cors");
-const http = require("http");
-const socketIO = require("socket.io");
-const { Pool } = require("pg");
-require("dotenv").config();
+// Updated index.js
+import express from "express";
+import cors from "cors";
+import http from "http";
+import { Server } from "socket.io";
+import pkg from "pg";
+const { Pool } = pkg;
+import { config } from "dotenv";
+import { ELEPHANTSQL_URL } from "../.env.js";
+
+config(); // Load environment variables from .env
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = new Server(server);
 
 const PORT = process.env.PORT || 5000;
 
+// Middleware
 app.use(cors());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // Parse the ElephantSQL connection URL
 const connectionString = ELEPHANTSQL_URL;
-
 const pool = new Pool({ connectionString });
 
-pool.connect((err) => {
-  if (err) {
-    console.error("Error connecting to the database:", err);
-  } else {
+pool
+  .connect()
+  .then(() => {
     console.log("Connected to PostgreSQL database");
-  }
+  })
+  .catch((err) => {
+    console.error("Error connecting to the database:", err);
+  });
+
+// Generic error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ success: false, message: "Internal Server Error" });
+});
+
+// Socket.IO connection
+io.on("connection", (socket) => {
+  console.log("Client connected");
+
+  // Socket.IO error handling
+  socket.on("error", (err) => {
+    console.error("Socket error:", err);
+  });
 });
 
 // Get all tasks from the database
@@ -89,10 +111,10 @@ app.delete("/tasks/:id", (req, res) => {
   });
 });
 
-io.on("connection", (socket) => {
-  console.log("Client connected");
-});
+// Handle CORS options requests
+app.options("*", cors());
 
+// Start the server
 server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
