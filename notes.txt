@@ -1,0 +1,3 @@
+Pending item
+1.Dockerise app.
+2.aws deployment
