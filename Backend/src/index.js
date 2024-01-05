@@ -40,7 +40,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: "Internal Server Error" });
 });
 
-// Socket.IO connection
+// Socket.IO connection like that of whatsapp
 io.on("connection", (socket) => {
   console.log("Client connected");
 
