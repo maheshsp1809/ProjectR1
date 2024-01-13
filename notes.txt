@@ -1,3 +1,5 @@
 Pending item
 1.Dockerise app.
 2.aws deployment
+3.usecallback is for the meoising functions 
+4.where as usememeo is for complex sum operations
